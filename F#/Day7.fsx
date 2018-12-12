@@ -54,6 +54,95 @@ let layout nodes =
     |> Seq.toArray 
     |> System.String
 
+// part 2
+
+let cost' duration (work:char) = 
+    int work - int 'A' + 1 + duration 
+
+type Worker = 
+    | Working of remaining:int * job: char
+    | Free
+
+type State = {
+    Second: int;
+    Workers: Worker array;
+    Work: Map<char, Node>;
+}
+
+let assign cost workers jobs = 
+
+    let workers = List.ofSeq workers
+    let moves = List.ofSeq jobs
+
+    let rec go workers moves = 
+        match workers, moves with
+        | Free::rest, m::ms -> (Working ((cost m), m)) :: go rest ms
+        | w::rest, ms -> w :: go rest ms
+        | _ -> []
+
+    go workers moves
+
+let layoutTimed seed assignJobs = 
+
+    let getJobsInProgress workers = 
+        workers |> Seq.choose ( function | Working (_,j) -> Some j | _ -> None )
+
+    let isJobInProgress job workers =
+        let inProgress = getJobsInProgress workers
+        inProgress |> Seq.contains job |> not
+
+    let completedJobs workers = 
+        workers
+        |> Seq.choose ( function | Working (1, j) -> Some j | _ -> None )
+
+    let progressJobExecution workers = 
+        workers 
+        |> Seq.map (function 
+                        | Free -> Free
+                        | Working (1, _) -> Free
+                        | Working (s, j) -> Working (s-1, j)
+        ) 
+
+    let updateWorkPlan completedWork plan = 
+        completedWork
+        |> Seq.fold (fun state job ->
+            state 
+            |> Map.remove job
+            |> Map.map ( fun k v -> { v with Parents = v.Parents |> Set.remove job })
+        ) plan
+
+    let findAvailableJobs work workers = 
+        work
+        |> Map.filter (fun k v -> v.Parents.IsEmpty && isJobInProgress k workers)
+        |> Map.toSeq 
+        |> Seq.map fst
+        |> Seq.sort
+        
+    let isWorkCompleted work workers = 
+        work = Map.empty && workers |> List.forall ((=)Free)
+
+    Seq.unfold (fun (state:State) -> 
+
+        let completedWorkThisTurn = completedJobs state.Workers
+        let workStateThisTurn = updateWorkPlan completedWorkThisTurn state.Work
+        let progressedWorkers = progressJobExecution state.Workers
+        let availableJobs = findAvailableJobs workStateThisTurn progressedWorkers
+        let assignedWorkers = assignJobs progressedWorkers availableJobs
+
+        if isWorkCompleted workStateThisTurn assignedWorkers then
+            None
+        else
+            let time = state.Second + 1
+            let state = 
+                 { state with 
+                    Second = time; 
+                    Workers = assignedWorkers |> Array.ofList; 
+                    Work = workStateThisTurn }
+            Some (state, state)
+
+    ) seed
+
+
 let testInput = 
     [|
         "Step C must be finished before step A can begin."
@@ -70,102 +159,19 @@ let input =
     |> Array.map parse
 
 let test1 = layout testInput
+
 let answer1 = layout input
-
-// part 2
-
-let cost' duration (work:char) = 
-    int work - int 'A' + 1 + duration 
-
-type Worker = 
-    | Working of remaining:int * job: char
-    | Free
-
-type State = {
-    Second: int;
-    Workers: Worker array;
-    Work: Map<char, Node>;
-}
-
-let zero input = { Second = 0; Workers = Array.create 5 Free; Work = reduce input }
-
-zero testInput
-
-let assign cost workers moves = 
-
-    let rec go workers moves = 
-        match workers, moves with
-        | Free::rest, m::ms -> (Working ((cost m), m)) :: go rest ms
-        | w::rest, ms -> w :: go rest ms
-        | _ -> []
-
-    go workers moves
-
-let layoutTimed seed assign = 
-
-    Seq.unfold (fun (state:State) -> 
-
-        let nextMoves = 
-            state.Work
-            |> Map.filter (fun k v -> v.Parents.IsEmpty)
-            |> Map.toSeq 
-            |> Seq.map fst
-            |> Seq.sort
-            |> List.ofSeq
-
-        let workers = 
-            state.Workers 
-            |> Array.map (function 
-                          | Free -> Free
-                          | Working (s, _) when s = 0 -> Free
-                          | Working (s, j) -> Working (s-1, j)
-            ) |> List.ofArray
-
-        let newWorkers = assign workers nextMoves
-        
-        let completedWorkThisTurn = 
-            let inProgress = 
-                newWorkers
-                |> Seq.choose (
-                    function 
-                    | Working (t, j) -> Some j 
-                    | _ -> None
-                )
-
-            Set.intersect (set nextMoves) (set inProgress)
-            
-        let newWorkState = 
-            takenWorkThisTurn
-            |> Seq.fold (fun state job ->
-                state 
-                |> Map.remove job
-                |> Map.map ( fun k v -> { v with Parents = v.Parents |> Set.remove job })
-            ) state.Work
-
-        if newWorkState = Map.empty && newWorkers |> List.forall ((=)Free) then
-            None
-        else
-            let time = state.Second + 1
-            let state = 
-                 { state with 
-                    Second = time; 
-                    Workers = newWorkers |> Array.ofList; 
-                    Work = newWorkState }
-            Some (state, state)
-
-    ) seed
 
 let test2 = 
     let zero = { Second = 0; Workers = Array.create 2 Free; Work = reduce testInput }
     let assign = assign (cost' 0)
     layoutTimed zero assign 
-    |> Seq.map (fun x -> x.Second, x.Workers )
-    |> Seq.toArray
-
-
+    |> Seq.last
+    |> fun x -> x.Second
 
 let answer2 = 
     let zero = { Second = 0; Workers = Array.create 5 Free; Work = reduce input }
     let assign = assign (cost' 60)
     layoutTimed zero assign 
     |> Seq.last
+    |> fun x -> x.Second
