@@ -21,46 +21,25 @@ let parseClaim input =
         Rect = { X = x; Y = y; Width = width; Height = height; }
     }
 
-let intersects1D (start1, end1) (start2, end2) =
-    start1 >= start2 && start1 <= end2 ||
-    end1 >= start2 && end1 <= end2
+let intersects1D a b =
+    let test (start1, end1) (start2, end2) =
 
-let intersection1D (start1, end1) (start2, end2) =
-    if intersects1D (start1, end1) (start2, end2) then
-        Some ( max start1 start2 , min end1 end2 )
-    else
-        None
+        start1 >= start2 && start1 <= end2 
+            || 
+        end1 >= start2 && end1 <= end2
+
+    test a b || test b a
 
 let inline decompose r = 
     let xs = ( r.X, r.X + r.Width - 1 )
     let ys = ( r.Y, r.Y + r.Height - 1 )
     xs, ys
 
-let intersection2D a b = 
-
+let intersects2D a b =
     let xs1, ys1 = decompose a
     let xs2, ys2 = decompose b
 
-    let ix = intersection1D xs1 xs2
-    let iy = intersection1D ys1 ys2
-
-    match (ix, iy) with
-    | Some (x1, x2), Some(y1, y2) -> 
-        let rect = { X = x1; Y = y1; Width = x2 - x1 + 1; Height = y2 - y1 + 1 }
-        Some rect
-    | _ -> None
-
-let t1 = "#1 @ 1,3: 4x4" |> parseClaim;
-let t2 = "#2 @ 3,1: 4x4" |> parseClaim;
-let t3 = "#3 @ 5,5: 2x2" |> parseClaim;
-
-let uniquePairs (xs : _ array ) = seq {
-    for i = 0 to xs.Length-1 do
-    for j = i+1 to xs.Length-1 do
-        yield (xs.[i], xs.[j])
-}
-
-let inline area r = r.Width * r.Height
+    intersects1D xs1 xs2 && intersects1D ys1 ys2
 
 let cells rect = seq {
     for x in rect.X..(rect.X + rect.Width - 1) do
@@ -68,23 +47,27 @@ let cells rect = seq {
     yield (x,y)
 }
 
-cells { X = 1; Y = 2; Width = 1; Height = 2 }
-
 let answer1 input = 
 
-    let intersections = 
-        input
-        |> uniquePairs
-        |> Seq.choose (fun (a,b) -> intersection2D a.Rect b.Rect)
-        |> Array.ofSeq
-
-    intersections
+    input
+    |> Array.map (fun x -> x.Rect)
     |> Seq.collect cells
-    |> Seq.distinct
+    |> Seq.groupBy id
+    |> Seq.filter (fun (_, items) -> items |> Seq.length > 1)
     |> Seq.length
 
+let answer2 input = 
+    seq {
+        for claim in input do
+            let rest = input |> Array.filter ((<>)claim)
+            let intersections = 
+                rest |> Array.filter (fun it -> intersects2D it.Rect claim.Rect)
+            if intersections = [||] then
+                yield claim
+    }
+    |> Seq.head
 
 let input = File.ReadAllLines( __SOURCE_DIRECTORY__ + "\Day3.txt" ) |> Array.map parseClaim
 
 answer1 input
-
+answer2 input
