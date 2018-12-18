@@ -100,3 +100,21 @@ let intersections=
 
 let max = intersections |> Set.map snd |> Set.maxElement
 
+let answer2 target (input:Origin[]) = 
+    
+    let comboDistance p = 
+        input 
+        |> Seq.map (distance p)
+        |> Seq.sum
+
+    let mutable answer = 0L
+
+    for x in -1100..1100 do
+        for y in -1100..1100 do
+            let d' = comboDistance (x,y)
+            if d' < target then
+                answer <- answer + 1L
+    answer
+
+answer2 32 testInput
+answer2 10000 prodInput
